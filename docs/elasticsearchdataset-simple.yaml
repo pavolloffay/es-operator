@@ -8,9 +8,22 @@ metadata:
   name: es-data-simple
   namespace: es-operator-demo
 spec:
-  replicas: 1
+  replicas: 2
   scaling:
-    enabled: false
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 99
+    minIndexReplicas: 2
+    maxIndexReplicas: 3
+    minShardsPerNode: 2
+    maxShardsPerNode: 6
+    scaleUpCPUBoundary: 50
+    scaleUpThresholdDurationSeconds: 900
+    scaleUpCooldownSeconds: 3600
+    scaleDownCPUBoundary: 25
+    scaleDownThresholdDurationSeconds: 1800
+    scaleDownCooldownSeconds: 3600
+    diskUsagePercentScaledownWatermark: 80
   template:
     metadata:
       labels:
