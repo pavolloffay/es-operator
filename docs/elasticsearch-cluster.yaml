@@ -4,12 +4,32 @@ metadata:
   name: es-config
   namespace: es-operator-demo
 data:
-  elasticsearch.yml: |
+  opensearch.yml: |
     cluster.name: es-cluster
     network.host: "0.0.0.0"
     bootstrap.memory_lock: false
     discovery.seed_hosts: [es-master]
     cluster.initial_master_nodes: [es-master-0]
+    plugins.security.ssl.transport.pemcert_filepath: esnode.pem
+    plugins.security.ssl.transport.pemkey_filepath: esnode-key.pem
+    plugins.security.ssl.transport.pemtrustedcas_filepath: root-ca.pem
+    plugins.security.ssl.transport.enforce_hostname_verification: false
+    plugins.security.ssl.http.enabled: true
+    plugins.security.ssl.http.pemcert_filepath: esnode.pem
+    plugins.security.ssl.http.pemkey_filepath: esnode-key.pem
+    plugins.security.ssl.http.pemtrustedcas_filepath: root-ca.pem
+    plugins.security.allow_unsafe_democertificates: true
+    plugins.security.allow_default_init_securityindex: true
+    plugins.security.authcz.admin_dn:
+      - CN=kirk,OU=client,O=client,L=test, C=de
+
+    plugins.security.audit.type: internal_opensearch
+    plugins.security.enable_snapshot_restore_privilege: true
+    plugins.security.check_snapshot_restore_write_privileges: true
+    plugins.security.restapi.roles_enabled: ["all_access", "security_rest_api_access"]
+    plugins.security.system_indices.enabled: true
+    plugins.security.system_indices.indices: [".opendistro-alerting-config", ".opendistro-alerting-alert*", ".opendistro-anomaly-results*", ".opendistro-anomaly-detector*", ".opendistro-anomaly-checkpoints", ".opendistro-anomaly-detection-state", ".opendistro-reports-*", ".opendistro-notifications-*", ".opendistro-notebooks", ".opendistro-asynchronous-search-response*"]
+    #node.max_local_storage_nodes: 3
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -49,29 +69,25 @@ spec:
           privileged: true
       containers:
       - name: elasticsearch
-        resources:
-          requests:
-            memory: 600Mi
-            cpu: 100m
-          limits:
-            memory: 600Mi
-        image: "docker.elastic.co/elasticsearch/elasticsearch-oss:7.10.2"
+        image: "opensearchproject/opensearch:1.0.0"
         env:
-        - name: "node.name"
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: "ES_JAVA_OPTS"
-          value: "-Xmx400m -Xms400m"
-        - name: node.master
-          value: "true"
-        - name: node.data
-          value: "false"
+          - name: "node.name"
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          # the performance analyzer was failing with this
+          #- name: "ES_JAVA_OPTS"
+          #  value: "-Xmx400m -Xms400m"
+          - name: node.master
+            value: "true"
+          - name: node.data
+            value: "false"
         readinessProbe:
-          httpGet:
-            scheme: HTTP
-            path: /_cluster/health?local=true
-            port: 9200
+          exec:
+            command:
+              - bash
+              - -c
+              - curl -XGET https://localhost:9200/_cluster/health?local=true --insecure -u admin:admin
           initialDelaySeconds: 20
         ports:
         - containerPort: 9200
@@ -79,11 +95,11 @@ spec:
         - containerPort: 9300
           name: es-transport
         volumeMounts:
-        - name: es-data
-          mountPath: /usr/share/elasticsearch/data
-        - name: elasticsearch-config
-          mountPath: /usr/share/elasticsearch/config/elasticsearch.yml
-          subPath: elasticsearch.yml
+          - name: es-data
+            mountPath: /usr/share/opensearch/data
+          - name: elasticsearch-config
+            mountPath: /usr/share/opensearch/config/opensearch.yml
+            subPath: opensearch.yml
       volumes:
         - name: es-data
           emptyDir: {}
@@ -91,8 +107,8 @@ spec:
           configMap:
             name: es-config
             items:
-              - key: elasticsearch.yml
-                path: elasticsearch.yml
+              - key: opensearch.yml
+                path: opensearch.yml
 ---
 apiVersion: v1
 kind: Service
